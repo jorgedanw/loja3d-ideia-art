@@ -1,43 +1,95 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==========================
+# 🌐 NEXT.JS / REACT PROJECT
+# ==========================
+node_modules/
+.next/
+out/
+build/
+dist/
+.cache/
+coverage/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# 🔥 Build outputs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# 📦 Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# vercel
-.vercel
+# ⚙️ Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ==========================
+# 🧩 DATABASE / PRISMA
+# ==========================
+.prisma/
+generated/
+generated-prisma/
+*.db
+*.sqlite
+*.db-journal
+*.db-shm
+*.db-wal
 
-/generated/prisma
+# ==========================
+# 🖼️ IMAGES / ASSETS
+# ==========================
+*.psd
+*.ai
+*.tiff
+*.tmp
+*.bak
+*.swp
+
+# ==========================
+# ⚙️ VSCODE / EDITOR
+# ==========================
+.vscode/
+.idea/
+*.code-workspace
+
+# ==========================
+# 🧪 TESTING / PLAYWRIGHT / CYPRESS
+# ==========================
+test-results/
+cypress/videos/
+cypress/screenshots/
+
+# ==========================
+# 🚀 DEPLOYMENT / CI
+# ==========================
+.vercel/
+.netlify/
+firebase-debug.log
+firebase.json
+functions/node_modules/
+
+# ==========================
+# 🧠 SYSTEM FILES
+# ==========================
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ==========================
+# 🧰 MISC
+# ==========================
+tmp/
+temp/
+*.tgz
+*.bak
+*.swp
+*.zip
+*.rar
+*.tar
+*.gz
