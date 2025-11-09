@@ -1,35 +1,41 @@
+// Lista de pedidos (server component)
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 
-export const dynamic = "force-dynamic"
+function brl(n: number) {
+  return Number(n || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  })
+}
 
-export default async function PedidosPage() {
+export default async function PedidosAdminPage() {
   const orders = await prisma.order.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
       orderNumber: true,
-      status: true,
-      total: true,
-      createdAt: true,
       customerName: true,
+      total: true,
+      status: true,
+      createdAt: true,
     },
   })
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Pedidos</h1>
+    <section className="max-w-5xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-semibold mb-6">Pedidos</h1>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left">
+      <div className="overflow-x-auto border rounded-xl">
+        <table className="min-w-full text-sm">
+          <thead className="bg-zinc-50">
             <tr>
-              <th className="p-3">#</th>
-              <th className="p-3">Cliente</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Total</th>
-              <th className="p-3">Criado em</th>
-              <th className="p-3"></th>
+              <th className="text-left p-3">#</th>
+              <th className="text-left p-3">Cliente</th>
+              <th className="text-left p-3">Total</th>
+              <th className="text-left p-3">Status</th>
+              <th className="text-left p-3">Data</th>
+              <th className="text-left p-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -37,15 +43,15 @@ export default async function PedidosPage() {
               <tr key={o.id} className="border-t">
                 <td className="p-3 font-mono">{o.orderNumber}</td>
                 <td className="p-3">{o.customerName}</td>
+                <td className="p-3">{brl(o.total)}</td>
                 <td className="p-3">{o.status}</td>
-                <td className="p-3">R$ {Number(o.total).toFixed(2)}</td>
                 <td className="p-3">
                   {new Date(o.createdAt).toLocaleString("pt-BR")}
                 </td>
-                <td className="p-3 text-right">
+                <td className="p-3">
                   <Link
                     href={`/admin/pedidos/${o.id}`}
-                    className="rounded-md bg-black px-3 py-1 text-white"
+                    className="text-blue-600 hover:underline"
                   >
                     Abrir
                   </Link>
@@ -55,7 +61,7 @@ export default async function PedidosPage() {
 
             {orders.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-zinc-500">
+                <td className="p-4 text-zinc-500" colSpan={6}>
                   Nenhum pedido ainda.
                 </td>
               </tr>
