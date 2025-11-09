@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  IN_PRODUCTION
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum ShipmentStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  RETURNED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REFUSED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  MERCADO_PAGO
+  STRIPE
+  MANUAL
+}
+
+enum PaymentMethod {
+  PIX
+  CARD
+  BOLETO
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String?
+  role      UserRole  @default(CUSTOMER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  orders          Order[]
+  priceLogEntries PriceLog[] @relation("PriceLogUser")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  description String
+  basePrice   Decimal         @db.Decimal(10, 2)
+  isActive    Boolean         @default(true)
+  categoryId  String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  category    Category        @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  variants    Variant[]
+  inventory   Inventory?
+  priceConfigs PriceConfig[]
+  priceLogs    PriceLog[]
+  orderItems   OrderItem[]    // <-- inverso adicionado
+
+  productionLeadTimeDays Int?
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  isPrimary Boolean  @default(false)
+
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+}
+
+model Variant {
+  id              String    @id @default(cuid())
+  productId       String
+  sku             String    @unique
+  name            String
+  color           String?
+  material        String?
+  size            String?
+  additionalPrice Decimal?  @db.Decimal(10, 2)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  product       Product   @relation(fields: [productId], references: [id])
+  inventory     Inventory?
+  priceConfigs  PriceConfig[]
+  priceLogs     PriceLog[]
+  orderItems    OrderItem[]  // <-- inverso adicionado
+
+  @@index([productId])
+  @@index([sku])
+}
+
+model Inventory {
+  id         String   @id @default(cuid())
+  productId  String?  @unique
+  variantId  String?  @unique
+  quantity   Int      @default(0)
+  reserved   Int      @default(0)
+  track      Boolean  @default(true)
+
+  product    Product? @relation(fields: [productId], references: [id])
+  variant    Variant? @relation(fields: [variantId], references: [id])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  userId        String?
+  status        OrderStatus   @default(PENDING_PAYMENT)
+  subtotal      Decimal       @db.Decimal(10, 2)
+  shippingCost  Decimal       @db.Decimal(10, 2)
+  discountTotal Decimal       @db.Decimal(10, 2) @default(0)
+  total         Decimal       @db.Decimal(10, 2)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  customerName         String
+  customerEmail        String
+  customerPhone        String?
+  shippingPostalCode   String
+  shippingAddress      String
+  shippingNumber       String
+  shippingComplement   String?
+  shippingNeighborhood String?
+  shippingCity         String
+  shippingState        String
+
+  user     User?     @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+  shipment Shipment?
+  payment  Payment?
+  couponId String?
+  coupon   Coupon?   @relation(fields: [couponId], references: [id])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  variantId String?
+  sku       String
+  name      String
+  unitPrice Decimal  @db.Decimal(10, 2)
+  quantity  Int
+  total     Decimal  @db.Decimal(10, 2)
+
+  order   Order    @relation(fields: [orderId], references: [id])
+  product Product  @relation(fields: [productId], references: [id])
+  variant Variant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+}
+
+model Shipment {
+  id            String         @id @default(cuid())
+  orderId       String         @unique
+  carrier       String?
+  serviceName   String?
+  trackingCode  String?
+  status        ShipmentStatus @default(PENDING)
+  shippedAt     DateTime?
+  deliveredAt   DateTime?
+  estimatedDays Int?
+
+  order         Order          @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id            String          @id @default(cuid())
+  orderId       String          @unique
+  provider      PaymentProvider
+  method        PaymentMethod
+  status        PaymentStatus   @default(PENDING)
+  transactionId String?
+  amount        Decimal         @db.Decimal(10, 2)
+  createdAt     DateTime        @default(now())
+  paidAt        DateTime?
+
+  order         Order           @relation(fields: [orderId], references: [id])
+}
+
+model Coupon {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  description   String?
+  type          CouponType
+  value         Decimal     @db.Decimal(10, 2)
+  minOrderValue Decimal?    @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int         @default(0)
+  validFrom     DateTime?
+  validTo       DateTime?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  orders        Order[]
+}
+
+model Setting {
+  id                    Int      @id @default(1)
+  storeName             String   @default("iDeia & Art")
+  defaultMarginPercent  Decimal  @db.Decimal(5, 2)  @default(30.00)
+  defaultTaxPercent     Decimal  @db.Decimal(5, 2)  @default(8.00)
+  defaultFailurePercent Decimal  @db.Decimal(5, 2)  @default(5.00)
+  defaultPackagingCost  Decimal  @db.Decimal(10, 2) @default(3.00)
+
+  mercadoPagoPublicKey   String?
+  mercadoPagoAccessToken String?
+  melhorEnvioToken       String?
+  updatedAt              DateTime @updatedAt
+}
+
+model PriceConfig {
+  id        String   @id @default(cuid())
+  productId String?
+  variantId String?
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product? @relation(fields: [productId], references: [id])
+  variant   Variant? @relation(fields: [variantId], references: [id])
+
+  @@unique([productId, variantId])
+}
+
+model PriceLog {
+  id           String   @id @default(cuid())
+  productId    String?
+  variantId    String?
+  changedById  String?
+  previousConfig Json?
+  newConfig    Json
+  createdAt    DateTime @default(now())
+
+  product      Product? @relation(fields: [productId], references: [id])
+  variant      Variant? @relation(fields: [variantId], references: [id])
+  changedBy    User?    @relation("PriceLogUser", fields: [changedById], references: [id])
+}

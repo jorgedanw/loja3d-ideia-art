@@ -15,17 +15,15 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="min-h-screen bg-zinc-50 text-zinc-900 antialiased">
         <div className="flex flex-col min-h-screen">
-          {/* HEADER */}
+          {/* Header */}
           <header className="w-full border-b bg-white/80 backdrop-blur">
             <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 py-3 px-4">
               <div className="flex items-center gap-3">
-                {/* Selo */}
                 <img
                   src="/images/logo-ideia-art-selo.png"
                   alt="iDeia & Art selo"
                   className="h-8 w-8 rounded-full"
                 />
-                {/* Logo completo */}
                 <img
                   src="/images/logo-ideia-art.png"
                   alt="iDeia & Art"
@@ -40,12 +38,12 @@ export default function RootLayout({
             </div>
           </header>
 
-          {/* CONTEÚDO */}
+          {/* Conteúdo */}
           <main className="flex-1">
             {children}
           </main>
 
-          {/* RODAPÉ */}
+          {/* Rodapé */}
           <footer className="border-t mt-8">
             <div className="max-w-6xl mx-auto px-4 py-4 text-xs text-zinc-500 flex items-center justify-between">
               <span>© {new Date().getFullYear()} iDeia & Art. Todos os direitos reservados.</span>
