@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma"
 
+export const dynamic = "force-dynamic"
+
 export default async function PrintPedido({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const order = await prisma.order.findUnique({
@@ -32,15 +34,23 @@ export default async function PrintPedido({ params }: { params: Promise<{ id: st
         <table>
           <thead><tr><th>SKU</th><th>Produto</th><th>Qtde</th><th>Unit.</th><th>Total</th></tr></thead>
           <tbody>
-            {order.items.map(i => (
-              <tr key={i.id}>
-                <td>{i.sku}</td>
-                <td>{i.name}</td>
-                <td>{i.quantity}</td>
-                <td>R$ {Number(i.unitPrice).toFixed(2)}</td>
-                <td>R$ {Number(i.total ?? i.unitPrice * i.quantity).toFixed(2)}</td>
-              </tr>
-            ))}
+            {order.items.map((item) => {
+              const unitPrice = Number(item.unitPrice)
+              const itemTotal =
+                item.total !== null && item.total !== undefined
+                  ? Number(item.total)
+                  : unitPrice * item.quantity
+
+              return (
+                <tr key={item.id}>
+                  <td>{item.sku}</td>
+                  <td>{item.name}</td>
+                  <td>{item.quantity}</td>
+                  <td>R$ {unitPrice.toFixed(2)}</td>
+                  <td>R$ {itemTotal.toFixed(2)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
 

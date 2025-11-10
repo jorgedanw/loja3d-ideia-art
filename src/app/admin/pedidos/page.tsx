@@ -1,9 +1,12 @@
 // Lista de pedidos (server component)
 import Link from "next/link"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
-function brl(n: number) {
-  return Number(n || 0).toLocaleString("pt-BR", {
+export const dynamic = "force-dynamic"
+
+function brl(n: number | Prisma.Decimal | null | undefined) {
+  return Number(n ?? 0).toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   })

@@ -2,11 +2,16 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { OrderStatus } from "@prisma/client" // ✅ usar enum gerado pelo Prisma
 
+const ORDER_STATUS_MAP = OrderStatus as Record<string, OrderStatus>
+const ORDER_STATUS_VALUES = Object.values(ORDER_STATUS_MAP) as OrderStatus[]
+
+if (ORDER_STATUS_VALUES.length === 0) {
+  throw new Error("Nenhum status configurado no enum OrderStatus.")
+}
+
 // Fallback seguro: usa PENDING se existir; senão, o primeiro valor do enum
 const DEFAULT_STATUS: OrderStatus =
-  // @ts-expect-error — acesso dinâmico para compatibilizar com diferentes schemas
-  (OrderStatus as any).PENDING ?? (Object.values(OrderStatus)[0] as OrderStatus)
-
+  ORDER_STATUS_MAP.PENDING ?? ORDER_STATUS_VALUES[0]
 // Gera número do pedido
 function generateOrderNumber() {
   const now = new Date()
@@ -68,6 +73,22 @@ export async function POST(req: Request) {
       )
     }
 
+    const normalizedStreet = street?.trim()
+    const normalizedNumber = number?.trim()
+    const normalizedCity = city?.trim()
+    const normalizedState = state?.trim()
+    const postalCode = (cep || "").replace(/\D/g, "")
+
+    if (!postalCode || !normalizedStreet || !normalizedNumber || !normalizedCity || !normalizedState) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Endereço incompleto. Informe CEP, rua, número, cidade e estado.",
+        },
+        { status: 400 },
+      )
+    }
+
     const shippingCost = 0
     const total = Number(subtotal || 0) + Number(shippingCost || 0)
     const orderNumber = generateOrderNumber()
@@ -80,11 +101,11 @@ export async function POST(req: Request) {
         customerEmail: email,
         customerPhone: phone || null,
 
-        shippingPostalCode: (cep || "").replace(/\D/g, ""), // só dígitos
-        shippingAddress: street || null,
-        shippingNumber: number || null,
-        shippingCity: city || null,
-        shippingState: state || null,
+        shippingPostalCode: postalCode, // só dígitos
+        shippingAddress: normalizedStreet,
+        shippingNumber: normalizedNumber,
+        shippingCity: normalizedCity,
+        shippingState: normalizedState,
 
         subtotal: Number(subtotal || 0),
         shippingCost: Number(shippingCost || 0),

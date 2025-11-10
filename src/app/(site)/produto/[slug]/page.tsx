@@ -4,6 +4,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { AddToCartButton } from "@/components/cart/AddToCartButton"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProdutoPage({
   params,
 }: {
