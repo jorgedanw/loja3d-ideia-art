@@ -1,181 +1,360 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/Button"
-import { type PriceConfigInput, calcularPreco } from "@/lib/price-calculator"
+import { useMemo, useState } from "react"
 
-type PriceFormProps = {
-  productId: string
-  initialConfig: Partial<PriceConfigInput>
+export type Config = {
+  consumoGramas: number
+  custoPorKg: number
+  tempoImpressaoHoras: number
+  custoHoraMaquina: number
+  consumoKwhHora: number
+  tarifaKwh: number
+  tempoPosProcessoHoras: number
+  custoHoraPos: number
+  insumosPos: number
+  taxaFalhaPercent: number
+  embalagem: number
+  impostosPercent: number
+  margemLucroPercent: number
+  descontoPercent?: number | undefined
 }
 
-export function PriceForm({ productId, initialConfig }: PriceFormProps) {
-  const [form, setForm] = useState<Partial<PriceConfigInput>>(initialConfig)
-  const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">(
-    "idle"
-  )
-  const [message, setMessage] = useState<string | null>(null)
-  const [preview, setPreview] = useState(
-    hasMinimum(form) ? calcularPreco(form as PriceConfigInput) : null
-  )
+type Props = {
+  initial?: Partial<Config> | null
+  defaults?: Partial<Config> | null
+  onSave: (payload: {
+    config: Config
+    applyToProduct: boolean
+    newBasePrice: number
+  }) => Promise<void>
+}
 
-  function handleChange(
-    key: keyof PriceConfigInput,
-    value: string
-  ) {
-    const num = value === "" ? undefined : Number(value)
-    const updated = { ...form, [key]: isNaN(num as number) ? undefined : num }
-    setForm(updated)
+const FALLBACK: Config = {
+  consumoGramas: 0,
+  custoPorKg: 80,
+  tempoImpressaoHoras: 0,
+  custoHoraMaquina: 6,
+  consumoKwhHora: 0.25,
+  tarifaKwh: 0.9,
+  tempoPosProcessoHoras: 0.5,
+  custoHoraPos: 1,
+  insumosPos: 1,
+  taxaFalhaPercent: 10,
+  embalagem: 1,
+  impostosPercent: 8,
+  margemLucroPercent: 50,
+  descontoPercent: undefined,
+}
 
-    if (hasMinimum(updated)) {
-      setPreview(calcularPreco(updated as PriceConfigInput))
-    } else {
-      setPreview(null)
+function brl(n: number) {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+
+export default function PriceForm({ initial, defaults, onSave }: Props) {
+  // Mescla: FALLBACK → defaults globais → valores salvos do produto
+  const merged = useMemo<Config>(() => {
+    return { ...FALLBACK, ...(defaults ?? {}), ...(initial ?? {}) } as Config
+  }, [initial, defaults])
+
+  const [form, setForm] = useState<Config>(merged)
+  const [applyToProduct, setApplyToProduct] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [savingDefaults, setSavingDefaults] = useState(false)
+
+  // simulação
+  const sim = useMemo(() => {
+    const g = form.consumoGramas || 0
+    const kg = form.custoPorKg || 0
+    const hr = form.tempoImpressaoHoras || 0
+    const hrPos = form.tempoPosProcessoHoras || 0
+
+    const custoMaterial = (g / 1000) * kg
+    const custoMaquina = hr * (form.custoHoraMaquina || 0)
+    const custoEnergia = (form.consumoKwhHora || 0) * (form.tarifaKwh || 0) * hr
+    const custoPos = hrPos * (form.custoHoraPos || 0)
+    const insumosPos = form.insumosPos || 0
+    const falha =
+      (custoMaterial + custoMaquina + custoEnergia + custoPos + insumosPos) *
+      ((form.taxaFalhaPercent || 0) / 100)
+    const embalagem = form.embalagem || 0
+
+    const custoUnitario =
+      custoMaterial + custoMaquina + custoEnergia + custoPos + insumosPos + falha + embalagem
+
+    const impostos = custoUnitario * ((form.impostosPercent || 0) / 100)
+    const margem = (custoUnitario + impostos) * ((form.margemLucroPercent || 0) / 100)
+
+    let preco = custoUnitario + impostos + margem
+    if (form.descontoPercent && form.descontoPercent > 0) {
+      preco = preco * (1 - form.descontoPercent / 100)
     }
+
+    return {
+      custoUnitario,
+      precoSugerido: preco,
+    }
+  }, [form])
+
+  function set<K extends keyof Config>(k: K, v: any) {
+    setForm((s) => ({ ...s, [k]: v }))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setStatus("saving")
-    setMessage(null)
-
+  async function handleSave() {
     try {
-      const res = await fetch(
-        `/api/admin/produtos/${productId}/preco`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        }
-      )
-
-      const json = await res.json()
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.message || "Erro ao salvar")
-      }
-
-      setStatus("success")
-      setMessage(json.message || "Salvo com sucesso.")
-
-      if (hasMinimum(form)) {
-        setPreview(calcularPreco(form as PriceConfigInput))
-      }
-    } catch (err: any) {
-      console.error(err)
-      setStatus("error")
-      setMessage(
-        err.message || "Erro ao salvar configuração de preço."
-      )
+      setSaving(true)
+      await onSave({
+        config: form,
+        applyToProduct,
+        newBasePrice: sim.precoSugerido,
+      })
+      alert("Configuração salva com sucesso!")
+    } catch (e: any) {
+      alert(e?.message ?? "Erro ao salvar.")
     } finally {
-      setTimeout(() => setStatus("idle"), 1500)
+      setSaving(false)
     }
   }
 
-  const loading = status === "saving"
+  async function handleSaveDefaults() {
+    try {
+      setSavingDefaults(true)
+      // Só os campos que existem no schema Setting:
+      const payload = {
+        margemLucroPercent: form.margemLucroPercent,
+        impostosPercent: form.impostosPercent,
+        taxaFalhaPercent: form.taxaFalhaPercent,
+        embalagem: form.embalagem,
+      }
+      const res = await fetch("/api/admin/precos/defaults", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-key": process.env.NEXT_PUBLIC_ADMIN_KEY || "",
+        },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.message || "Erro ao salvar padrões.")
+      alert("Padrões salvos!")
+    } catch (e: any) {
+      alert(e?.message ?? "Erro ao salvar padrões.")
+    } finally {
+      setSavingDefaults(false)
+    }
+  }
 
   return (
-    <div className="grid md:grid-cols-2 gap-6 items-start">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        {renderInput("consumoGramas", "Consumo (g)")}
-        {renderInput("custoPorKg", "Custo por Kg (R$)")}
-        {renderInput("tempoImpressaoHoras", "Tempo de Impressão (h)")}
-        {renderInput("custoHoraMaquina", "Custo Hora Máquina (R$)")}
-        {renderInput("consumoKwhHora", "Consumo kWh/h")}
-        {renderInput("tarifaKwh", "Tarifa kWh (R$)")}
-        {renderInput("tempoPosProcessoHoras", "Pós-processo (h)")}
-        {renderInput("custoHoraPos", "Custo Hora Pós (R$)")}
-        {renderInput("insumosPos", "Insumos Pós (R$)")}
-        {renderInput("taxaFalhaPercent", "Taxa de Falha (%)")}
-        {renderInput("embalagem", "Embalagem (R$)")}
-        {renderInput("impostosPercent", "Impostos (%)")}
-        {renderInput("margemLucroPercent", "Margem (%)")}
-        {renderInput("descontoPercent", "Desconto (%)")}
+    <div className="grid md:grid-cols-2 gap-6">
+      <div className="space-y-3">
+        {/* Campos do formulário */}
+        <Field label="Consumo (g)">
+          <input
+            className="input"
+            type="number"
+            value={form.consumoGramas}
+            onChange={(e) => set("consumoGramas", Number(e.target.value))}
+          />
+        </Field>
 
-        <div className="pt-2">
-          <Button type="submit" disabled={loading}>
-            {loading ? "Salvando..." : "Salvar configuração"}
-          </Button>
+        <Field label="Custo por Kg (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.custoPorKg}
+            onChange={(e) => set("custoPorKg", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Tempo de Impressão (h)">
+          <input
+            className="input"
+            type="number"
+            value={form.tempoImpressaoHoras}
+            onChange={(e) => set("tempoImpressaoHoras", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Custo Hora Máquina (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.custoHoraMaquina}
+            onChange={(e) => set("custoHoraMaquina", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Consumo kWh/h">
+          <input
+            className="input"
+            type="number"
+            value={form.consumoKwhHora}
+            onChange={(e) => set("consumoKwhHora", Number(e.target.value))}
+            step="0.01"
+          />
+        </Field>
+
+        <Field label="Tarifa kWh (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.tarifaKwh}
+            onChange={(e) => set("tarifaKwh", Number(e.target.value))}
+            step="0.01"
+          />
+        </Field>
+
+        <Field label="Pós-processo (h)">
+          <input
+            className="input"
+            type="number"
+            value={form.tempoPosProcessoHoras}
+            onChange={(e) => set("tempoPosProcessoHoras", Number(e.target.value))}
+            step="0.1"
+          />
+        </Field>
+
+        <Field label="Custo Hora Pós (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.custoHoraPos}
+            onChange={(e) => set("custoHoraPos", Number(e.target.value))}
+            step="0.1"
+          />
+        </Field>
+
+        <Field label="Insumos Pós (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.insumosPos}
+            onChange={(e) => set("insumosPos", Number(e.target.value))}
+            step="0.1"
+          />
+        </Field>
+
+        <Field label="Taxa de Falha (%)">
+          <input
+            className="input"
+            type="number"
+            value={form.taxaFalhaPercent}
+            onChange={(e) => set("taxaFalhaPercent", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Embalagem (R$)">
+          <input
+            className="input"
+            type="number"
+            value={form.embalagem}
+            onChange={(e) => set("embalagem", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Impostos (%)">
+          <input
+            className="input"
+            type="number"
+            value={form.impostosPercent}
+            onChange={(e) => set("impostosPercent", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Margem (%)">
+          <input
+            className="input"
+            type="number"
+            value={form.margemLucroPercent}
+            onChange={(e) => set("margemLucroPercent", Number(e.target.value))}
+          />
+        </Field>
+
+        <Field label="Desconto (%)">
+          <input
+            className="input"
+            type="number"
+            value={form.descontoPercent ?? 0}
+            onChange={(e) => set("descontoPercent", Number(e.target.value) || undefined)}
+          />
+        </Field>
+
+        <div className="flex items-center gap-2 pt-2">
+          <input
+            id="apply"
+            type="checkbox"
+            className="checkbox"
+            checked={applyToProduct}
+            onChange={(e) => setApplyToProduct(e.target.checked)}
+          />
+          <label htmlFor="apply" className="text-sm text-zinc-700">
+            Aplicar preço sugerido no produto ao salvar
+          </label>
         </div>
 
-        {message && (
-          <p
-            className={`text-xs mt-1 ${
-              status === "error"
-                ? "text-red-600"
-                : "text-emerald-600"
-            }`}
-          >
-            {message}
-          </p>
-        )}
-      </form>
+        <div className="flex gap-2 pt-3">
+          <button onClick={handleSave} disabled={saving} className="btn-primary">
+            {saving ? "Salvando..." : "Salvar configuração"}
+          </button>
 
-      <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-sm">
-        <h3 className="font-semibold mb-2">Simulação</h3>
-        {preview ? (
-          <>
-            <p>
-              Custo unitário:{" "}
-              <strong>R$ {preview.custoUnitario.toFixed(2)}</strong>
-            </p>
-            <p>
-              Preço final sugerido:{" "}
-              <strong>R$ {preview.precoFinal.toFixed(2)}</strong>
-            </p>
-            <p className="mt-2 text-xs text-zinc-500">
-              Use essa simulação como base para definir o preço exibido na
-              loja.
-            </p>
-          </>
-        ) : (
-          <p className="text-zinc-500 text-xs">
-            Preencha os campos mínimos (consumo, custo/kg, tempo e
-            custo hora) para ver o cálculo completo.
-          </p>
-        )}
+          <button
+            onClick={handleSaveDefaults}
+            disabled={savingDefaults}
+            className="btn-secondary"
+            title="Gravar como padrão global (Margem, Impostos, Falha e Embalagem)"
+          >
+            {savingDefaults ? "Salvando padrões..." : "Salvar como padrão"}
+          </button>
+        </div>
       </div>
+
+      <aside className="border rounded-xl p-4">
+        <h3 className="font-semibold mb-2">Simulação</h3>
+        <p>
+          Custo unitário: <strong>{brl(sim.custoUnitario)}</strong>
+        </p>
+        <p>
+          Preço final sugerido: <strong>{brl(sim.precoSugerido)}</strong>
+        </p>
+        <p className="text-xs text-zinc-500 mt-2">
+          Use essa simulação como base para definir o preço exibido na loja.
+        </p>
+      </aside>
+
+      <style jsx>{`
+        .input {
+          width: 100%;
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          padding: 0.5rem 0.75rem;
+        }
+        .checkbox {
+          width: 16px;
+          height: 16px;
+        }
+        .btn-primary {
+          background: #111827;
+          color: #fff;
+          border-radius: 0.5rem;
+          padding: 0.5rem 0.9rem;
+        }
+        .btn-primary[disabled] {
+          opacity: 0.7;
+        }
+        .btn-secondary {
+          border: 1px solid #e5e7eb;
+          border-radius: 0.5rem;
+          padding: 0.5rem 0.9rem;
+        }
+      `}</style>
     </div>
   )
-
-  function renderInput(
-    key: keyof PriceConfigInput,
-    label: string
-  ) {
-    const value = form[key]
-    return (
-      <div>
-        <label className="block text-xs text-zinc-600 mb-1">
-          {label}
-        </label>
-        <input
-          type="number"
-          step="any"
-          defaultValue={
-            value !== undefined && value !== null ? String(value) : ""
-          }
-          onChange={(e) => handleChange(key, e.target.value)}
-          className="w-full border border-zinc-300 rounded-lg px-2 py-1 text-sm"
-        />
-      </div>
-    )
-  }
 }
 
-function hasMinimum(cfg: Partial<PriceConfigInput>): cfg is PriceConfigInput {
+function Field(props: { label: string; children: React.ReactNode }) {
   return (
-    cfg.consumoGramas !== undefined &&
-    cfg.custoPorKg !== undefined &&
-    cfg.tempoImpressaoHoras !== undefined &&
-    cfg.custoHoraMaquina !== undefined &&
-    cfg.consumoKwhHora !== undefined &&
-    cfg.tarifaKwh !== undefined &&
-    cfg.tempoPosProcessoHoras !== undefined &&
-    cfg.custoHoraPos !== undefined &&
-    cfg.insumosPos !== undefined &&
-    cfg.taxaFalhaPercent !== undefined &&
-    cfg.embalagem !== undefined &&
-    cfg.impostosPercent !== undefined &&
-    cfg.margemLucroPercent !== undefined
+    <label className="block">
+      <span className="block text-sm text-zinc-700 mb-1">{props.label}</span>
+      {props.children}
+    </label>
   )
 }
